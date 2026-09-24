@@ -9,7 +9,6 @@ except Exception:
 
 import tkinter as tk
 from tkinter import ttk
-from tkinter import simpledialog, messagebox
 import threading
 import sys
 import os
@@ -20,7 +19,6 @@ from PIL import Image, ImageTk
 import keyboard
 
 import auto_bot
-from strategy_runtime import load_config, atomic_json, DailyLedger
 
 # 🚀 必须在窗口创建前执行：通知 Windows 这是一个独立应用，强制任务栏绑定自身图标
 try:
@@ -149,8 +147,6 @@ class HololiveBotUI(tk.Tk):
         self.show_bg = True
 
         self.current_coins, self.current_fails, self.current_profit = get_local_data()
-        self.strategy_config = load_config(auto_bot.APP_DIR, auto_bot.RESOURCE_DIR)
-        self.strategy_modes = ['time_target', 'legacy']
 
         self.title(TRANSLATIONS[self.current_lang]["title"])
         # 🚀 替换这里的两行：优先加载 PNG 图标，任务栏永不退化为白纸
@@ -206,14 +202,6 @@ class HololiveBotUI(tk.Tk):
 
         self.btn_hotkey = ttk.Button(self, text=self.current_hotkey, command=self.start_listen_hotkey)
         self.hotkey_window = self.canvas.create_window(0, 0, window=self.btn_hotkey, anchor="e")
-
-        self.strategy_label_id = self.canvas.create_text(0, 0, text='翻倍策略', font=font_normal, anchor='w')
-        self.combo_strategy = ttk.Combobox(self, state='readonly', values=['時間優先 → 最大翻倍', '舊版 60% → 獎金 10,000'])
-        self.combo_strategy.current(self.strategy_modes.index(self.strategy_config['mode']))
-        self.combo_strategy.bind('<<ComboboxSelected>>', self.change_strategy)
-        self.strategy_window = self.canvas.create_window(0, 0, window=self.combo_strategy, anchor='e')
-        self.btn_correct = ttk.Button(self, text='校正今日', command=self.correct_daily_coins)
-        self.correct_window = self.canvas.create_window(0, 0, window=self.btn_correct, anchor='e')
 
         keyboard.add_hotkey(self.current_hotkey, lambda: self.after(0, self.stop_bot))
 
@@ -363,36 +351,31 @@ class HololiveBotUI(tk.Tk):
         self.canvas.coords(self.hotkey_window, w * 0.92, h * 0.15)
         self.canvas.itemconfig(self.hotkey_window, width=w * 0.25)
 
-        self.canvas.coords(self.strategy_label_id, w * 0.08, h * 0.20)
-        self.canvas.coords(self.strategy_window, w * 0.92, h * 0.20)
-        self.canvas.itemconfig(self.strategy_window, width=w * 0.55)
-        self.canvas.coords(self.status_id, w * 0.08, h * 0.25)
-        self.canvas.coords(self.coins_id, w * 0.08, h * 0.31)
-        self.canvas.coords(self.correct_window, w * 0.92, h * 0.31)
-        self.canvas.itemconfig(self.correct_window, width=w * 0.20)
+        self.canvas.coords(self.status_id, w * 0.08, h * 0.21)
+        self.canvas.coords(self.coins_id, w * 0.08, h * 0.27)
 
         btn_w = w * 0.38
         btn_h = h * 0.045
 
-        self.canvas.coords(self.btn_next_win, w * 0.28, h * 0.38)
+        self.canvas.coords(self.btn_next_win, w * 0.28, h * 0.34)
         self.canvas.itemconfig(self.btn_next_win, width=btn_w, height=btn_h)
-        self.canvas.coords(self.btn_stop_win, w * 0.72, h * 0.38)
+        self.canvas.coords(self.btn_stop_win, w * 0.72, h * 0.34)
         self.canvas.itemconfig(self.btn_stop_win, width=btn_w, height=btn_h)
 
-        self.canvas.coords(self.btn_bg_win, w * 0.28, h * 0.44)
+        self.canvas.coords(self.btn_bg_win, w * 0.28, h * 0.40)
         self.canvas.itemconfig(self.btn_bg_win, width=btn_w, height=btn_h)
-        self.canvas.coords(self.btn_exit_win, w * 0.72, h * 0.44)
+        self.canvas.coords(self.btn_exit_win, w * 0.72, h * 0.40)
         self.canvas.itemconfig(self.btn_exit_win, width=btn_w, height=btn_h)
 
         log_x = w * 0.06
-        log_y = h * 0.50
+        log_y = h * 0.47
         self.canvas.coords(self.log_text_id, log_x, log_y)
 
         # 🚀 修改 2：给日志文字设定最大物理宽度。当碰到距离右侧 15% 的边界时，强行折行！
         self.canvas.itemconfig(self.log_text_id, width=w * 0.85)
 
         self.canvas.coords(self.scrollbar_win, w * 0.98, log_y)
-        self.canvas.itemconfig(self.scrollbar_win, height=h * 0.45)
+        self.canvas.itemconfig(self.scrollbar_win, height=h * 0.48)
 
     def toggle_bg(self):
         self.show_bg = not self.show_bg
@@ -419,8 +402,6 @@ class HololiveBotUI(tk.Tk):
         self.btn_exit.configure(text=t["btn_exit"])
 
         self.update_stats_display()
-        self.combo_strategy.configure(state='disabled' if self.is_running else 'readonly')
-        self.btn_correct.configure(state='disabled' if self.is_running else 'normal')
 
         if not self.is_running:
             self.canvas.itemconfig(self.status_id, text=t["status_idle"], fill="#111111")
@@ -438,9 +419,6 @@ class HololiveBotUI(tk.Tk):
         self.refresh_texts()
 
     def start_bot(self):
-        if self.bot_thread is not None and self.bot_thread.is_alive():
-            return
-        self.active_strategy = self.strategy_modes[self.combo_strategy.current()]
         self.is_running = True
         self.refresh_texts()
         self.canvas.itemconfig(self.status_id,
@@ -465,44 +443,17 @@ class HololiveBotUI(tk.Tk):
 
     def run_bot(self):
         try:
-            auto_bot.auto_play_loop(self.active_strategy)
+            auto_bot.auto_play_loop()
         except Exception as e:
             print(f"崩溃异常: {e}")
+            self.canvas.itemconfig(self.status_id, text="状态：崩溃异常", fill="red")
         finally:
+            self.is_running = False
             auto_bot.bot_running = False
-            self.after(0, self.finish_bot)
+            self.refresh_texts()
             print("\n[系统] 挂机已完全停止。")
 
-    def finish_bot(self):
-        self.is_running = False
-        self.refresh_texts()
-
-    def change_strategy(self, event=None):
-        if self.is_running:
-            return
-        self.strategy_config['mode'] = self.strategy_modes[self.combo_strategy.current()]
-        atomic_json(auto_bot.APP_DIR / 'strategy_config.json', self.strategy_config)
-
-    def correct_daily_coins(self):
-        if self.is_running:
-            return
-        value = simpledialog.askinteger('校正今日累計',
-            '輸入今日已結算的累計獎勵（不是錢包餘額）：',
-            parent=self, initialvalue=self.current_coins, minvalue=0)
-        if value is None:
-            return
-        try:
-            ledger = DailyLedger(auto_bot.DATA_FILE, self.strategy_config['day_reset_hour'])
-            ledger.data['coins'] = value
-            ledger.data['target_reached'] = value >= auto_bot.TARGET_LIMIT
-            ledger.save()
-            self.update_stats_display(value, ledger.data['fails'], value-ledger.data['fails']*50)
-            print(f'[校正] 今日已結算累計已改為 {value}。')
-        except Exception as exc:
-            messagebox.showerror('校正失敗', str(exc), parent=self)
-
     def destroy(self):
-        auto_bot.bot_running = False
         sys.stdout = self.original_stdout
         keyboard.unhook_all()
         super().destroy()

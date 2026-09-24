@@ -1,0 +1,31 @@
+{
+  "mode": "time_target",
+  "target": 19800,
+  "daily_cap": 20000,
+  "payout_probabilities": [
+    0.684262297319869,
+    0.2399609395075291,
+    0.022216631253854452,
+    0.023858288123779426,
+    0.01454000081907186,
+    0.014584196570819188,
+    0.0002749712521841916,
+    0.0002250841556172272,
+    7.75909972761846e-05
+  ],
+  "prior_hands": 128,
+  "prior_seed": 19800,
+  "round_seconds": 7.92,
+  "flip_seconds": 4.245,
+  "cashout_seconds": 2.0,
+  "fail_seconds": 2.0,
+  "day_reset_hour": 0,
+  "high_low_rules": "ordinary deck; equal ranks replay; joker pauses",
+  "min_cashout": 0,
+  "timing_calibration": {
+    "source": "measurements/2026-09-18-baseline.md",
+    "failed_round_cycle_seconds": 9.92,
+    "successful_flip_cycle_seconds": 4.245,
+    "note": "round_seconds excludes assumed 2s failure overhead to avoid counting it twice; cashout/failure overheads remain estimates; sparse old-version samples"
+  }
+}

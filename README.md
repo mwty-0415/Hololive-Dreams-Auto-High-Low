@@ -15,10 +15,6 @@ YouTube：https://www.youtube.com/@hmr0000
 
 专为《Hololive Dreams》小游戏设计的全自动挂机与策略决策工具，集成智能留牌算法、高低牌动态算牌及多语言 UI[cite: 1, 2]。
 
-### 三阶段翻倍策略
-
-第一、第三阶段持续翻倍，直到游戏自动结算；第二阶段在本局开始时按起手奖金确定成功次数，随后只按确认成功的次数决定收手。例如 200 起手成功 5 次得到 6,400，700 起手成功 3 次得到 5,600。平手与重复画面不计数，失败重试同一阶段，成功入账才推进。原版仍为默认策略。[详细规则](THREE_STAGE.md#zh-cn)。
-
 ### ✨ 核心特性
 - **最优留牌计算**：基于 Numba JIT 高性能加速，自动评估起手五张牌并计算期望收益最高的保留组合[cite: 2]。
 - **动态算牌记牌**：内置 High-Low 记牌引擎，根据剩余牌堆实时计算当前最高胜率分支[cite: 2]。
@@ -38,14 +34,10 @@ python main_ui.py
 ```
 
 ### 🚀 打包为独立执行程序 (.exe)
-
 ```powershell
-python -m pip install -r requirements.txt pyinstaller
-python -m PyInstaller -y "Hololive Dreams-Auto.spec"
+pyinstaller -y -D -w -n "Hololive Dreams-Auto" -i icon.ico --collect-all ddddocr --exclude-module torch --exclude-module scipy --exclude-module pandas --exclude-module matplotlib main_ui.py
 ```
-
-请在仓库根目录运行以上命令。仓库内的 `Hololive Dreams-Auto.spec` 会自动打包 `templates/`、背景、图标及所需模型，无需手动复制资源。输出位于 `dist/Hololive Dreams-Auto/`，请保留整个文件夹（包括 `_internal/`），不要单独移动 EXE。
-
+*仓库内的 `.spec` 已自动打包模板、背景和图标，无需再手动复制资源。*
 
 ### 📖 使用说明
 1. 启动游戏并保持游戏窗口未完全最小化（支持后台遮挡，但不可最小化至任务栏）[cite: 2]。
@@ -64,10 +56,6 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 ## 🇭🇰/🇹🇼 繁體中文
 
 專為《Hololive Dreams》小遊戲設計的全自動掛機與策略決策工具，整合智慧留牌演算法、高低牌動態算牌及多語言 UI[cite: 1, 2]。
-
-### 三階段翻倍策略
-
-第一、第三階段持續翻倍，直到遊戲自動結算；第二階段在本局開始時按起手獎金確定成功次數，之後只按確認成功的次數決定收手。例如 200 起手成功 5 次得到 6,400，700 起手成功 3 次得到 5,600。平手與重複畫面不計數，失敗重試同一階段，成功入帳才前進。原版仍為預設策略。[詳細規則](THREE_STAGE.md#zh-tw)。
 
 ### ✨ 核心特色
 - **最佳留牌計算**：基於 Numba JIT 高效能加速，自動評估初始五張手牌並計算期望收益最高的保留組合[cite: 2]。
@@ -88,14 +76,10 @@ python main_ui.py
 ```
 
 ### 🚀 打包為獨立執行檔 (.exe)
-
 ```powershell
-python -m pip install -r requirements.txt pyinstaller
-python -m PyInstaller -y "Hololive Dreams-Auto.spec"
+pyinstaller -y -D -w -n "Hololive Dreams-Auto" -i icon.ico --collect-all ddddocr --exclude-module torch --exclude-module scipy --exclude-module pandas --exclude-module matplotlib main_ui.py
 ```
-
-請在儲存庫根目錄執行以上指令。儲存庫內的 `Hololive Dreams-Auto.spec` 會自動打包 `templates/`、背景、圖示及所需模型，無需手動複製資源。輸出位於 `dist/Hololive Dreams-Auto/`，請保留整個資料夾（包含 `_internal/`），不要單獨移動 EXE。
-
+*打包完成後，請將 `templates/` 資料夾、`background.png` 及 `icon.ico` 複製至產生的 `dist/Hololive Dreams-Auto/` 目錄下即可直接執行[cite: 1, 2]。*
 
 ### 📖 使用說明
 1. 開啟遊戲並維持遊戲視窗未被完全最小化（可被其他視窗遮擋，但不可縮小至工作列）[cite: 2]。
@@ -112,10 +96,6 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 ## 🇺🇸 English
 
 An automated assistant and decision-making bot for the mini-game in *Hololive Dreams*, featuring optimal poker-hand calculation, dynamic High-Low card counting, and a multilingual GUI[cite: 1, 2].
-
-### Three-stage doubling strategy
-
-Stages one and three keep doubling until the game settles automatically. Stage two sets a win-count target from the initial payout, then cashes out by confirmed wins rather than ongoing reward readings: five wins from 200 yields 6,400; three wins from 700 yields 5,600. Ties and repeated frames do not count. Losses retry the same stage; confirmed settlements advance it. Legacy remains the default. [Full rules](THREE_STAGE.md#en).
 
 ### ✨ Key Features
 - **Optimal Hand Selection**: Powered by Numba JIT acceleration to evaluate initial poker hands and retain the mathematically optimal combination[cite: 2].
@@ -136,14 +116,10 @@ python main_ui.py
 ```
 
 ### 🚀 Build Executable (.exe)
-
 ```powershell
-python -m pip install -r requirements.txt pyinstaller
-python -m PyInstaller -y "Hololive Dreams-Auto.spec"
+pyinstaller -y -D -w -n "Hololive Dreams-Auto" -i icon.ico --collect-all ddddocr --exclude-module torch --exclude-module scipy --exclude-module pandas --exclude-module matplotlib main_ui.py
 ```
-
-Run these commands from the repository root. The included `Hololive Dreams-Auto.spec` automatically bundles `templates/`, backgrounds, icons, and the required models; no manual resource copying is needed. Output is placed in `dist/Hololive Dreams-Auto/`. Keep the entire folder, including `_internal/`, together rather than moving the EXE alone.
-
+*After compilation, copy the `templates/` folder, `background.png`, and `icon.ico` into the generated `dist/Hololive Dreams-Auto/` directory[cite: 1, 2].*
 
 ### 📖 Instructions
 1. Launch the game and ensure the game window is not fully minimized[cite: 2].
@@ -160,10 +136,6 @@ Run these commands from the repository root. The included `Hololive Dreams-Auto.
 ## 🇯🇵 日本語
 
 『Hololive Dreams』のミニゲーム向けに設計された全自動周回・戦略決定支援ツールです[cite: 1, 2]。ポーカーの最適ホールド判定、ハイ＆ロー（High-Low）の動的カウンティング、多言語対応UIを搭載しています[cite: 1, 2]。
-
-### 3段階のダブルアップ戦略
-
-第1・第3段階はゲームが自動精算するまで挑戦します。第2段階は初期報酬から必要成功回数を決め、その後は成功回数だけで精算を判断します。200なら5回で6,400、700なら3回で5,600です。引き分けや重複画面は数えず、敗北時は同じ段階を再試行し、入金確認後に次へ進みます。既定は従来モードです。[詳細ルール（英語）](THREE_STAGE.md#en)。
 
 ### ✨ 主な機能
 - **ポーカー最適手札計算**：Numba JITによる高速演算で、配られた5枚の手札から期待値が最大となるキープカードを自動選定します[cite: 2]。
@@ -184,14 +156,10 @@ python main_ui.py
 ```
 
 ### 🚀 単体実行ファイル (.exe) のビルド
-
 ```powershell
-python -m pip install -r requirements.txt pyinstaller
-python -m PyInstaller -y "Hololive Dreams-Auto.spec"
+pyinstaller -y -D -w -n "Hololive Dreams-Auto" -i icon.ico --collect-all ddddocr --exclude-module torch --exclude-module scipy --exclude-module pandas --exclude-module matplotlib main_ui.py
 ```
-
-上記のコマンドはリポジトリのルートで実行してください。同梱の `Hololive Dreams-Auto.spec` が `templates/`、背景、アイコン、必要なモデルを自動的に組み込むため、手動コピーは不要です。出力先は `dist/Hololive Dreams-Auto/` です。EXE だけを移動せず、`_internal/` を含むフォルダ全体を保持してください。
-
+*ビルド完了後、`templates/` フォルダ、`background.png`、`icon.ico` を生成された `dist/Hololive Dreams-Auto/` ディレクトリ内に配置してください[cite: 1, 2]。*
 
 ### 📖 使用方法
 1. ゲームを起動し、ウィンドウが完全に最小化されていない状態にします（他ウィンドウの背面に隠れていても動作可能）[cite: 2]。
