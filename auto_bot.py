@@ -16,7 +16,7 @@ import ddddocr
 from recognizer import CardRecognizer
 from poker_core import calculate_best, JOKER_ID
 from settlement import SettlementReader
-from reward_vision import read_challenge_number
+from reward_vision import read_challenge_number, read_result_number as read_result_digits
 from challenge_reward import ChallengeRewardReader
 from phased_strategy import PhasedStrategy
 
@@ -42,7 +42,6 @@ TARGET_LIMIT = 19800
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)).resolve()
 TEMPLATE_DIR = RESOURCE_DIR / "templates"
-DEBUG_DIR = APP_DIR / "debug"
 DATA_FILE = APP_DIR / "daily_coins.json"
 
 # Icon templates and hard-coded recognition zones were captured at 1920x1080.
@@ -460,21 +459,7 @@ def read_screen_number(img, search_zone):
 # OCR 引擎 2：用于纯白底浅蓝字 (最终 RESULT 结算界面的 Coins)
 # ---------------------------------------------------------
 def read_result_number(img, search_zone):
-    sx, sy, sw, sh = search_zone
-    if sw == 0 or sh == 0:
-        return 0
-
-    roi = img[sy:sy + sh, sx:sx + sw]
-    roi = cv2.resize(roi, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-
-    _, img_bytes = cv2.imencode('.png', gray)
-    text = ocr.classification(img_bytes.tobytes())
-
-    try:
-        return int(''.join(filter(str.isdigit, text)))
-    except ValueError:
-        return 0
+    return read_result_digits(img, search_zone, ocr)
 
 
 # ================= 3. 数据与主循环 =================
@@ -769,7 +754,6 @@ def auto_play_loop(mode='legacy'):
                         # === 2. 状态对比追踪连拍 ===
                         print("[预判] 启动多帧对比追踪...")
                         upcoming_card_val = None
-                        DEBUG_DIR.mkdir(exist_ok=True)
 
                         for i in range(25):
                             time.sleep(0.04)
@@ -792,10 +776,6 @@ def auto_play_loop(mode='legacy'):
                                                 print(
                                                     f"[预判] 第 {i + 1} 帧追踪到新卡牌！下一张将是: {newest_card.rank}")
 
-                                                cx, cy, cw, ch = newest_rect
-                                                cv2.imwrite(str(DEBUG_DIR / "2_next_card.png"),
-                                                            flip_img[max(0, cy - 40):cy + ch + 40,
-                                                            max(0, cx - 40):cx + cw + 40])
                                                 break
                                 except Exception:
                                     continue
