@@ -8,8 +8,10 @@ _internal/
 *.pyd
 *.onnx
 daily_coins.json
+window_config.json
+.idea/
 __pycache__/
 test/
-ÐÂ½¨ÎÄ¼þ¼Ð/
+æ–°å»ºæ–‡ä»¶å¤¹/
 debug/
 logs/

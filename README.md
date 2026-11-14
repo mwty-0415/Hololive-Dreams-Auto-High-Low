@@ -25,7 +25,9 @@ YouTube：https://www.youtube.com/@hmr0000
 - **风控止盈与极限冲刺**：
   - **垫刀期**：胜率偏低时主动收手提现，确保单日收益平稳累积[cite: 2]。
   - **冲刺期**：金币达 19,800 后自动解除风控，以追求单笔 10,000+ 巨额奖金为目标发起冲刺[cite: 2]。
-- **收支监控**：自动记录失败轮次与门票扣除（50/局），实时核算净利润[cite: 1, 2]。
+- **收支监控**：自动记录失败轮次与门票扣除（50/局），实时核算净利润；支持每日 03:00 跨日自动重置与手动账本校准[cite: 1, 2]。
+- **目标窗口与模拟器支持**：支持在界面下拉选择桌面端或 Android 模拟器窗口，自动定位渲染子视口并提供交互式区域裁剪与预览；同时支持 **ADB 后台静默模式**（不抢占桌面鼠标焦点）。
+- **单帧识别诊断与配置记忆**：内置一键识别诊断工具（实时输出各 ROI 模板与数字识别结果及调试截图），并自动记忆窗口偏好、裁剪区域、语言与策略选择。
 - **多语言界面**：原生支持简体中文、繁體中文、English 及 日本語[cite: 1]。
 - **全局快捷键**：支持自定义全局停止热键（默认 `INSERT`），挂机时随时安全接管[cite: 1]。
 
@@ -48,12 +50,12 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 
 
 ### 📖 使用说明
-1. 启动游戏并保持游戏窗口未完全最小化（支持后台遮挡，但不可最小化至任务栏）[cite: 2]。
-2. 打开辅助工具，按需配置语言与快捷键[cite: 1]。
-3. 点击 **「启动挂机」** 开始自动化运行[cite: 1]。
-4. 任何时候按下设定的停止快捷键均可安全关停[cite: 1]。
+1. 启动游戏（PC 端或 Android 模拟器）并保持游戏窗口未完全最小化（支持后台遮挡，但不可最小化至任务栏）[cite: 2]。
+2. 打开辅助工具，在顶部下拉栏选择目标窗口（或切换至 **ADB 设备** 以启用后台静默截图与点击）；若模拟器带边框可点击 **「区域裁剪」** 框选画面，或用 **「识别诊断」** 验证单帧识别效果。
+3. 按需配置语言、策略、账本校准与停止快捷键[cite: 1]。
+4. 点击 **「启动挂机」** 开始自动化运行；任何时候按下设定的停止快捷键均可安全关停[cite: 1]。
 
-> 兼容性说明：程序会精确匹配 `hololive-Dreams` 游戏窗口，支持 Windows 显示缩放、多显示器和其它窗口遮挡。执行鼠标点击时游戏会短暂置于前台，这是游戏接收输入所必需的。
+> 兼容性说明：支持任意选定的游戏/模拟器窗口、Windows 显示缩放、多显示器和其它窗口遮挡。桌面窗口模式下执行鼠标点击时目标窗口会短暂置于前台（这是 PC 端接收输入所必需的）；模拟器启用 ADB 模式后可完全后台运行。每日战绩统一以凌晨 `03:00` 至次日 `02:59` 为周期。
 
 ### ⚠️ 免责声明
 - 本工具仅供 Python 编程学习、图像识别技术研究交流使用。
@@ -75,7 +77,9 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 - **風控止盈與極限衝刺**：
   - **墊刀期**：勝率偏低時主動收手提現，確保單日代幣在安全線內穩定累積[cite: 2]。
   - **衝刺期**：當代幣達到 19,800 後自動解除風控，鎖定單局 10,000+ 巨額獎金發起衝刺[cite: 2]。
-- **收支與淨利監控**：自動記錄失敗次數與入場門票消耗（50/局），即時計算淨利潤[cite: 1, 2]。
+- **收支與淨利監控**：自動記錄失敗次數與入場門票消耗（50/局），即時計算淨利潤；支援每日 03:00 跨日自動重置與手動帳本校準[cite: 1, 2]。
+- **目標視窗與模擬器支援**：可於介面下拉選擇 PC 端或 Android 模擬器視窗，自動定位渲染子視區並提供互動式區域裁切與預覽；另支援 **ADB 背景靜默模式**（不搶佔滑鼠焦點）。
+- **單幀辨識診斷與偏好記憶**：內建一鍵辨識診斷工具，並自動記住視窗選擇、裁切區域、語言與策略設定。
 - **多語言介面**：原生支援簡體中文、繁體中文、English 及 日本語[cite: 1]。
 - **全域快捷鍵**：支援自訂全域停止快捷鍵（預設為 `INSERT`），掛機途中隨時安全接管[cite: 1]。
 
@@ -98,10 +102,12 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 
 
 ### 📖 使用說明
-1. 開啟遊戲並維持遊戲視窗未被完全最小化（可被其他視窗遮擋，但不可縮小至工作列）[cite: 2]。
-2. 開啟本輔助程式，依需求設定語言與停止快捷鍵[cite: 1]。
-3. 點擊 **「啟動掛機」** 進入全自動流程[cite: 1]。
-4. 任何時候按下設定的停止快捷鍵皆可安全停機[cite: 1]。
+1. 開啟遊戲（PC 端或 Android 模擬器）並維持遊戲視窗未被完全最小化（可被其他視窗遮擋，但不可縮小至工作列）[cite: 2]。
+2. 開啟本輔助程式，選擇目標視窗或切換 **ADB 裝置**；若有模擬器邊框可透過 **「區域裁切」** 微調並以 **「辨識診斷」** 檢查單幀結果。
+3. 依需求設定語言、策略、帳本校準與停止快捷鍵[cite: 1]。
+4. 點擊 **「啟動掛機」** 進入全自動流程；任何時候按下設定的停止快捷鍵皆可安全停機[cite: 1]。
+
+> 每日戰績統一以凌晨 `03:00` 至次日 `02:59` 為週期（PC 與模擬器共用同一份帳本）。
 
 ### ⚠️ 免責聲明
 - 本工具僅供 Python 程式學習、電腦視覺技術研究交流使用。
@@ -123,7 +129,9 @@ Stages one and three keep doubling until the game settles automatically. Stage t
 - **Smart Risk Control & Sprint Mode**:
   - **Staging Phase**: Automatically cashes out when odds are unfavorable to steadily build up bankroll[cite: 2].
   - **Sprint Phase**: Unlocks aggressive play once total coins reach 19,800, pushing for cashouts of 10,000+ coins in a single run[cite: 2].
-- **Profit & Loss Tracking**: Automatically tracks failed runs and ticket fees (50 coins/entry), calculating net profit in real time[cite: 1, 2].
+- **Profit & Loss Tracking**: Automatically tracks failed runs and ticket fees (50 coins/entry), calculating net profit in real time, with daily reset at `03:00` and manual ledger calibration[cite: 1, 2].
+- **Target Window & Emulator Support**: Select any PC game or Android emulator window via dropdown, with automatic render-viewport detection, interactive crop preview, and **background ADB silent mode** (no focus stealing).
+- **Single-Frame Diagnostics & Saved Preferences**: Built-in recognition diagnostic dialog plus persistent window, crop, language, and strategy preferences.
 - **Multilingual UI**: Native support for Simplified Chinese, Traditional Chinese, English, and Japanese[cite: 1].
 - **Global Stop Hotkey**: Supports customizable hotkeys (default `INSERT`) to safely halt the bot at any point[cite: 1].
 
@@ -146,10 +154,12 @@ Run these commands from the repository root. The included `Hololive Dreams-Auto.
 
 
 ### 📖 Instructions
-1. Launch the game and ensure the game window is not fully minimized[cite: 2].
-2. Open the bot UI and select your preferred language and stop hotkey[cite: 1].
-3. Click **"Start Bot"** to begin automation[cite: 1].
-4. Press your configured stop hotkey at any time to safely exit the loop[cite: 1].
+1. Launch the game (PC client or Android emulator) and ensure the game window is not fully minimized[cite: 2].
+2. Open the bot UI, select your target window or connect an **ADB device**, optionally adjust the viewport with **Crop** and verify with **Diagnose**.
+3. Configure your preferred language, strategy, ledger calibration, and stop hotkey[cite: 1].
+4. Click **"Start Bot"** to begin automation; press your configured stop hotkey at any time to safely exit the loop[cite: 1].
+
+> Daily stats reset at `03:00` (covering `03:00` through `02:59` the next day) using a shared `daily_coins.json` ledger across PC and emulator.
 
 ### ⚠️ Disclaimer
 - This project is developed solely for educational, computer vision, and automation research purposes.
@@ -171,7 +181,9 @@ Run these commands from the repository root. The included `Hololive Dreams-Auto.
 - **リスク管理とスプリントモード**：
   - **安定期**：勝率が低い場合は無理をせず利益を確定（ドロップ）し、目標コインまで着実に貯蓄します[cite: 2]。
   - **スプリント期**：累計コインが19,800に達するとリスク制限を解除し、1撃10,000以上の大量獲得を目指して強気に挑戦します[cite: 2]。
-- **収支・利益トラッキング**：失敗回数と入場料（1回あたり50コイン）の損失を自動集計し、当日の純利益をリアルタイムで表示します[cite: 1, 2]。
+- **収支・利益トラッキング**：失敗回数と入場料（1回あたり50コイン）の損失を自動集計し、当日の純利益をリアルタイムで表示します（毎日 `03:00` 自動リセット・手動補正対応）[cite: 1, 2]。
+- **ターゲットウィンドウ＆エミュレータ対応**：PC版・Androidエミュレータのウィンドウ選択、描画領域自動検出・クロップ調整、およびマウスフォーカスを奪わない **ADB バックグラウンドモード**に対応しています。
+- **認識診断＆設定自動保存**：単一フレーム認識診断ツールを内蔵し、ウィンドウ選択・クロップ・言語・戦略設定を自動保存します。
 - **多言語対応**：簡体字中国語、繁体字中国語、英語、日本語に対応[cite: 1]。
 - **グローバル停止ショートカット**：任意のキー（初期設定：`INSERT`）でいつでも安全に停止できます[cite: 1]。
 
@@ -194,10 +206,12 @@ python -m PyInstaller -y "Hololive Dreams-Auto.spec"
 
 
 ### 📖 使用方法
-1. ゲームを起動し、ウィンドウが完全に最小化されていない状態にします（他ウィンドウの背面に隠れていても動作可能）[cite: 2]。
-2. ツールを起動し、言語や停止ショートカットキーを設定します[cite: 1]。
-3. **「起動」** ボタンを押すと自動周回が開始されます[cite: 1]。
-4. 途中で停止したい場合は、設定した停止キーを押すと安全に終了します[cite: 1]。
+1. ゲーム（PC版またはAndroidエミュレータ）を起動し、ウィンドウが完全に最小化されていない状態にします（他ウィンドウの背面に隠れていても動作可能）[cite: 2]。
+2. ツールを起動し、対象ウィンドウまたは **ADB デバイス** を選択します（必要に応じて領域クロップや認識診断を実行）。
+3. 言語・戦略・収支補正・停止ショートカットキーを設定します[cite: 1]。
+4. **「起動」** ボタンを押すと自動周回が開始されます。途中で停止したい場合は、設定した停止キーを押すと安全に終了します[cite: 1]。
+
+> 日次集計は毎日 `03:00` ～ 翌日 `02:59` を1日として記録されます。
 
 ### ⚠️ 免責事項
 - 本ツールはPythonプログラミング、画像認識、および自動化技術の研究・学習を目的として作成されています。

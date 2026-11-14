@@ -5,6 +5,7 @@ import cv2
 import pydirectinput
 import ctypes
 from ctypes import wintypes
+from datetime import datetime, timedelta
 import random
 import time
 import os
@@ -13,12 +14,26 @@ import sys
 from pathlib import Path
 import ddddocr
 
+from adb_target import adb_capture_frame, adb_tap
 from recognizer import CardRecognizer
 from poker_core import calculate_best, JOKER_ID
 from settlement import SettlementReader
 from reward_vision import read_challenge_number, read_result_number as read_result_digits
 from challenge_reward import ChallengeRewardReader
 from phased_strategy import PhasedStrategy
+from window_target import (
+    apply_crop_rect,
+    bring_window_to_front,
+    capture_window_frame,
+    clear_capture_cache,
+    click_at_screen,
+    find_window_by_title,
+    get_client_geometry,
+    get_root_hwnd,
+    get_window_title,
+    resolve_render_viewport,
+    warn_if_target_elevated,
+)
 
 try:
     # Windows source-mode runs otherwise inherit a legacy console encoding and
@@ -35,6 +50,13 @@ bot_running = False
 # ================= 全局配置与常量 =================
 GAME_TITLE = "hololive-Dreams"
 TARGET_LIMIT = 19800
+GAME_DAY_RESET_HOUR = 3
+
+
+def get_game_date_str(now=None):
+    """Return the logical game date using 03:00 ~ next day 02:59 as one day."""
+    dt = datetime.now() if now is None else now
+    return (dt - timedelta(hours=GAME_DAY_RESET_HOUR)).strftime("%Y-%m-%d")
 
 # All bundled assets are resolved relative to the executable/source directory.
 # The old code depended on the process working directory, so launching from a
@@ -63,38 +85,20 @@ except Exception:
     pass
 
 
-_user32 = ctypes.windll.user32
-_gdi32 = ctypes.windll.gdi32
+_user32 = ctypes.WinDLL("user32")
 _capture_context = None
 
-_user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
-_user32.GetClientRect.restype = wintypes.BOOL
-_user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
-_user32.ClientToScreen.restype = wintypes.BOOL
-_user32.GetDC.argtypes = [wintypes.HWND]
-_user32.GetDC.restype = wintypes.HDC
-_user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
-_user32.ReleaseDC.restype = ctypes.c_int
-_user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
-_user32.PrintWindow.restype = wintypes.BOOL
+TARGET_MODE = "window"
+TARGET_HWND = None
+TARGET_TITLE = None
+TARGET_ADB_SERIAL = None
+TARGET_ADB_PATH = None
+TARGET_CROP_RECT = None
+TARGET_AUTO_DETECT_CHILD = True
+_last_logged_target = None
+
 _user32.IsWindow.argtypes = [wintypes.HWND]
 _user32.IsWindow.restype = wintypes.BOOL
-_user32.ShowWindowAsync.argtypes = [wintypes.HWND, ctypes.c_int]
-_user32.SetForegroundWindow.argtypes = [wintypes.HWND]
-_user32.BringWindowToTop.argtypes = [wintypes.HWND]
-_user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
-                                 ctypes.c_int, ctypes.c_int, wintypes.UINT]
-
-_gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
-_gdi32.CreateCompatibleDC.restype = wintypes.HDC
-_gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
-_gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
-_gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
-_gdi32.SelectObject.restype = wintypes.HGDIOBJ
-_gdi32.GetBitmapBits.argtypes = [wintypes.HBITMAP, wintypes.LONG, wintypes.LPVOID]
-_gdi32.GetBitmapBits.restype = wintypes.LONG
-_gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
-_gdi32.DeleteDC.argtypes = [wintypes.HDC]
 
 # === 动态寻框参数 ===
 CARD_WIDTH = 260
@@ -247,122 +251,175 @@ def find_game_window():
     return max(matches, key=lambda win: max(0, win.width) * max(0, win.height))
 
 
+def set_target_window(hwnd=None, title=None, crop_rect=None, auto_detect_child=True):
+    global TARGET_MODE, TARGET_HWND, TARGET_TITLE, TARGET_ADB_SERIAL, TARGET_ADB_PATH
+    global TARGET_CROP_RECT, TARGET_AUTO_DETECT_CHILD, _last_logged_target, _capture_context
+    TARGET_MODE = "window"
+    TARGET_HWND = int(hwnd) if hwnd else None
+    TARGET_TITLE = title.strip() if title else None
+    TARGET_ADB_SERIAL = None
+    TARGET_ADB_PATH = None
+    TARGET_CROP_RECT = tuple(crop_rect) if crop_rect else None
+    TARGET_AUTO_DETECT_CHILD = bool(auto_detect_child)
+    _last_logged_target = None
+    _capture_context = None
+    clear_capture_cache()
+
+
+def set_adb_target(serial, adb_path=None, crop_rect=None):
+    global TARGET_MODE, TARGET_HWND, TARGET_TITLE, TARGET_ADB_SERIAL, TARGET_ADB_PATH
+    global TARGET_CROP_RECT, TARGET_AUTO_DETECT_CHILD, _last_logged_target, _capture_context
+    TARGET_MODE = "adb"
+    TARGET_HWND = None
+    TARGET_TITLE = None
+    TARGET_ADB_SERIAL = serial.strip() if serial else None
+    TARGET_ADB_PATH = adb_path
+    TARGET_CROP_RECT = tuple(crop_rect) if crop_rect else None
+    TARGET_AUTO_DETECT_CHILD = True
+    _last_logged_target = None
+    _capture_context = None
+    clear_capture_cache()
+
+
+def resolve_target_hwnd():
+    if TARGET_MODE == "adb":
+        return None
+    if TARGET_HWND is not None:
+        if _user32.IsWindow(TARGET_HWND):
+            return get_root_hwnd(TARGET_HWND)
+        if TARGET_TITLE:
+            refound = find_window_by_title(TARGET_TITLE, exact=True) or find_window_by_title(TARGET_TITLE, exact=False)
+            if refound:
+                return get_root_hwnd(refound)
+        return None
+
+    if TARGET_TITLE:
+        return find_window_by_title(TARGET_TITLE, exact=True) or find_window_by_title(TARGET_TITLE, exact=False)
+
+    win = find_game_window()
+    if win is not None and getattr(win, "_hWnd", None):
+        return get_root_hwnd(win._hWnd)
+    return find_window_by_title(GAME_TITLE, exact=True)
+
+
 def _get_client_geometry(hwnd):
-    rect = wintypes.RECT()
-    origin = wintypes.POINT(0, 0)
-    if not _user32.GetClientRect(hwnd, ctypes.byref(rect)):
-        raise ctypes.WinError()
-    if not _user32.ClientToScreen(hwnd, ctypes.byref(origin)):
-        raise ctypes.WinError()
-    return origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top
-
-
-def _capture_client_with_printwindow(hwnd, width, height):
-    """Capture a client area even when another window covers the game."""
-    window_dc = _user32.GetDC(hwnd)
-    memory_dc = bitmap = old_bitmap = None
-    try:
-        if not window_dc:
-            raise ctypes.WinError()
-        memory_dc = _gdi32.CreateCompatibleDC(window_dc)
-        bitmap = _gdi32.CreateCompatibleBitmap(window_dc, width, height)
-        if not memory_dc or not bitmap:
-            raise ctypes.WinError()
-        old_bitmap = _gdi32.SelectObject(memory_dc, bitmap)
-
-        # PW_CLIENTONLY | PW_RENDERFULLCONTENT. This works for the game's
-        # Chromium/DirectX-backed window and avoids desktop occlusion.
-        if not _user32.PrintWindow(hwnd, memory_dc, 0x00000001 | 0x00000002):
-            raise RuntimeError("PrintWindow failed")
-
-        byte_count = width * height * 4
-        buffer = ctypes.create_string_buffer(byte_count)
-        if _gdi32.GetBitmapBits(bitmap, byte_count, buffer) != byte_count:
-            raise RuntimeError("GetBitmapBits returned an incomplete frame")
-        frame = np.frombuffer(buffer, dtype=np.uint8).reshape(height, width, 4)
-        frame = frame[:, :, :3].copy()  # BGRA -> BGR by dropping alpha.
-        if frame.size == 0 or float(frame.mean()) < 1.0:
-            raise RuntimeError("PrintWindow returned a blank frame")
-        return frame
-    finally:
-        if old_bitmap and memory_dc:
-            _gdi32.SelectObject(memory_dc, old_bitmap)
-        if bitmap:
-            _gdi32.DeleteObject(bitmap)
-        if memory_dc:
-            _gdi32.DeleteDC(memory_dc)
-        if window_dc:
-            _user32.ReleaseDC(hwnd, window_dc)
+    return get_client_geometry(hwnd)
 
 
 def capture_game_window():
-    global _capture_context
-    win = find_game_window()
-    if win is None:
+    global _capture_context, _last_logged_target
+    if TARGET_MODE == "adb":
+        if not TARGET_ADB_SERIAL:
+            _capture_context = None
+            return None, 0, 0
+        try:
+            raw_img, ctx = adb_capture_frame(
+                TARGET_ADB_SERIAL,
+                adb_path=TARGET_ADB_PATH,
+                crop_rect=TARGET_CROP_RECT,
+            )
+        except Exception as exc:
+            print(f"[警告] ADB 截图失败: {exc}")
+            _capture_context = None
+            return None, 0, 0
+
+        target_sig = ("adb", ctx["serial"], ctx["width"], ctx["height"], TARGET_CROP_RECT)
+        if target_sig != _last_logged_target:
+            _last_logged_target = target_sig
+            crop_note = " (已应用自定义区域)" if TARGET_CROP_RECT else ""
+            print(
+                f"[ADB] 已连接后台静默模式: {ctx['serial']}{crop_note} | "
+                f"画面: {ctx['width']}x{ctx['height']}"
+            )
+            aspect = ctx["width"] / max(1, ctx["height"])
+            if abs(aspect - (REFERENCE_WIDTH / REFERENCE_HEIGHT)) > 0.08:
+                print("[提示] 当前画面比例非 16:9，若识别异常建议将模拟器设为 16:9 分辨率（如 1280x720）或使用「框选」裁剪游戏区。")
+        _capture_context = ctx
+        normalized = cv2.resize(raw_img, (REFERENCE_WIDTH, REFERENCE_HEIGHT), interpolation=cv2.INTER_CUBIC)
+        return normalized, ctx["left"], ctx["top"]
+
+    hwnd = resolve_target_hwnd()
+    if not hwnd:
         _capture_context = None
         return None, 0, 0
 
-    if win.isMinimized:
-        win.restore()
-        time.sleep(0.5)
-
-    hwnd = win._hWnd
     try:
-        left, top, width, height = _get_client_geometry(hwnd)
-        if width < 640 or height < 360:
-            raise RuntimeError(f"游戏客户区尺寸异常: {width}x{height}")
-        img = _capture_client_with_printwindow(hwnd, width, height)
+        raw_img, ctx = capture_window_frame(
+            hwnd,
+            crop_rect=TARGET_CROP_RECT,
+            auto_detect_child=TARGET_AUTO_DETECT_CHILD,
+        )
     except Exception as exc:
-        # Fallback for Windows versions/drivers where PrintWindow is disabled.
-        # Bring the exact game window forward before using a desktop capture.
-        print(f"[警告] 后台窗口截图失败，切换到前台截图: {exc}")
-        _bring_game_to_front(hwnd)
-        time.sleep(0.2)
-        left, top, width, height = _get_client_geometry(hwnd)
-        monitor = {"top": top, "left": left, "width": width, "height": height}
-        with mss.MSS() as sct:
-            img = cv2.cvtColor(np.array(sct.grab(monitor)), cv2.COLOR_BGRA2BGR)
+        print(f"[警告] 目标窗口截图失败: {exc}")
+        _capture_context = None
+        return None, 0, 0
 
-    _capture_context = {
-        "hwnd": hwnd,
-        "width": width,
-        "height": height,
-    }
-    normalized = cv2.resize(img, (REFERENCE_WIDTH, REFERENCE_HEIGHT), interpolation=cv2.INTER_CUBIC)
-    return normalized, left, top
+    warn_if_target_elevated(ctx["root_hwnd"])
+    target_sig = (
+        ctx["root_hwnd"],
+        ctx["render_hwnd"],
+        ctx["width"],
+        ctx["height"],
+        ctx["capture_method"],
+        TARGET_CROP_RECT,
+    )
+    if target_sig != _last_logged_target:
+        _last_logged_target = target_sig
+        title = get_window_title(ctx["root_hwnd"]) or TARGET_TITLE or GAME_TITLE
+        child_note = " (已自动定位内部渲染区)" if ctx["render_hwnd"] != ctx["root_hwnd"] else ""
+        crop_note = " (已应用自定义区域)" if TARGET_CROP_RECT else ""
+        print(
+            f"[窗口] 已锁定: {title}{child_note}{crop_note} | "
+            f"画面: {ctx['width']}x{ctx['height']} | 截图: {ctx['capture_method']}"
+        )
+        aspect = ctx["width"] / max(1, ctx["height"])
+        if abs(aspect - (REFERENCE_WIDTH / REFERENCE_HEIGHT)) > 0.08:
+            print("[提示] 当前画面比例非 16:9，若识别异常建议将模拟器设为 16:9 分辨率（如 1280x720）或使用「框选」裁剪游戏区。")
+
+    _capture_context = ctx
+    normalized = cv2.resize(raw_img, (REFERENCE_WIDTH, REFERENCE_HEIGHT), interpolation=cv2.INTER_CUBIC)
+    return normalized, ctx["left"], ctx["top"]
 
 
 def _bring_game_to_front(hwnd):
-    if not hwnd or not _user32.IsWindow(hwnd):
-        return False
-    _user32.ShowWindowAsync(hwnd, 9)  # SW_RESTORE
-    _user32.BringWindowToTop(hwnd)
-    _user32.SetForegroundWindow(hwnd)
-    # A short topmost -> non-topmost transition also handles windows that were
-    # visually above the foreground window on multi-monitor setups.
-    flags = 0x0001 | 0x0002 | 0x0040  # NOSIZE | NOMOVE | SHOWWINDOW
-    _user32.SetWindowPos(hwnd, wintypes.HWND(-1), 0, 0, 0, 0, flags)
-    _user32.SetWindowPos(hwnd, wintypes.HWND(-2), 0, 0, 0, 0, flags)
-    return True
+    return bring_window_to_front(hwnd)
 
 
 def safe_click(rel_x, rel_y, win_left, win_top):
     if not _capture_context:
-        print("[警告] 尚未取得有效游戏窗口，取消点击。")
+        print("[警告] 尚未取得有效目标，取消点击。")
         return False
 
-    hwnd = _capture_context["hwnd"]
-    if not _bring_game_to_front(hwnd):
-        print("[警告] 游戏窗口已失效，取消点击。")
+    if _capture_context.get("mode") == "adb":
+        offset_x = random.randint(-4, 4)
+        offset_y = random.randint(-4, 4)
+        tap_x = _capture_context["left"] + round(rel_x * _capture_context["width"] / REFERENCE_WIDTH) + offset_x
+        tap_y = _capture_context["top"] + round(rel_y * _capture_context["height"] / REFERENCE_HEIGHT) + offset_y
+        max_x = max(0, _capture_context.get("device_width", _capture_context["width"]) - 1)
+        max_y = max(0, _capture_context.get("device_height", _capture_context["height"]) - 1)
+        tap_x = max(0, min(max_x, tap_x))
+        tap_y = max(0, min(max_y, tap_y))
+        return adb_tap(
+            _capture_context["serial"],
+            tap_x,
+            tap_y,
+            adb_path=_capture_context.get("adb_path"),
+        )
+
+    root_hwnd = _capture_context.get("root_hwnd") or _capture_context.get("hwnd")
+    if not _bring_game_to_front(root_hwnd):
+        print("[警告] 目标窗口已失效，取消点击。")
         return False
 
     # Match coordinates are in the normalized 1920x1080 frame. Transform them
-    # back to the current client size, then query the current screen origin in
-    # case the user moved the game window since the frame was captured.
+    # back to the current render/crop area in case the window was moved or resized.
     try:
-        client_left, client_top, client_width, client_height = _get_client_geometry(hwnd)
+        auto_child = _capture_context.get("auto_detect_child", TARGET_AUTO_DETECT_CHILD)
+        crop_rect = _capture_context.get("crop_rect", TARGET_CROP_RECT)
+        _, _, render_rect = resolve_render_viewport(root_hwnd, auto_detect_child=auto_child)
+        client_left, client_top, client_width, client_height = apply_crop_rect(render_rect, crop_rect)
     except Exception as exc:
-        print(f"[警告] 无法读取游戏窗口坐标，取消点击: {exc}")
+        print(f"[警告] 无法读取目标窗口坐标，取消点击: {exc}")
         return False
 
     offset_x = random.randint(-4, 4)
@@ -371,14 +428,7 @@ def safe_click(rel_x, rel_y, win_left, win_top):
     target_x = client_left + round(rel_x * client_width / REFERENCE_WIDTH) + offset_x
     target_y = client_top + round(rel_y * client_height / REFERENCE_HEIGHT) + offset_y
 
-    pydirectinput.moveTo(target_x, target_y)
-    time.sleep(random.uniform(0.02, 0.05))
-
-    pydirectinput.mouseDown()
-    time.sleep(random.uniform(0.05, 0.08))
-    pydirectinput.mouseUp()
-
-    time.sleep(random.uniform(0.05, 0.1))
+    click_at_screen(target_x, target_y)
     return True
 
 
@@ -423,12 +473,96 @@ def detect_game_state(screen_bgr):
         for tpl_path in tpl_paths:
             if not os.path.exists(tpl_path):
                 continue
-            tpl_img = cv2.imread(tpl_path, cv2.IMREAD_GRAYSCALE)
+            tpl_img = cv2.imdecode(np.fromfile(tpl_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+            if tpl_img is None:
+                continue
             res = cv2.matchTemplate(screen_gray, tpl_img, cv2.TM_CCOEFF_NORMED)
             _, max_val, _, _ = cv2.minMaxLoc(res)
             if max_val >= THRESHOLD:
                 return state
     return "UNKNOWN"
+
+
+def diagnose_frame(screen_bgr, card_rec=None):
+    """Run state matching, card recognition, and OCR on a single 1920x1080 frame."""
+    annotated = screen_bgr.copy()
+    screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+
+    best_state = "UNKNOWN"
+    best_tpl = "-"
+    best_score = 0.0
+    matched_state = "UNKNOWN"
+    matched_box = None
+
+    for state, tpl_paths in ICON_TEMPLATES.items():
+        for tpl_path in tpl_paths:
+            if not os.path.exists(tpl_path):
+                continue
+            tpl_img = cv2.imdecode(np.fromfile(tpl_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+            if tpl_img is None or tpl_img.shape[0] > screen_gray.shape[0] or tpl_img.shape[1] > screen_gray.shape[1]:
+                continue
+            res = cv2.matchTemplate(screen_gray, tpl_img, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+            if max_val > best_score:
+                best_score = float(max_val)
+                best_state = state
+                best_tpl = os.path.basename(tpl_path)
+            if max_val >= 0.85 and matched_state == "UNKNOWN":
+                matched_state = state
+                th, tw = tpl_img.shape[:2]
+                matched_box = (max_loc[0], max_loc[1], tw, th)
+
+    if matched_box is not None:
+        mx, my, mw, mh = matched_box
+        cv2.rectangle(annotated, (mx, my), (mx + mw, my + mh), (0, 255, 0), 3)
+        cv2.putText(annotated, f"{matched_state} ({best_score:.2f})", (mx, max(30, my - 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+    sx, sy, sw, sh = HIGH_LOW_SEARCH_ZONE
+    cv2.rectangle(annotated, (sx, sy), (sx + sw, sy + sh), (255, 160, 0), 2)
+    rx, ry, rw, rh = REWARD_ZONE
+    cv2.rectangle(annotated, (rx, ry), (rx + rw, ry + rh), (0, 230, 255), 2)
+    cx, cy, cw, ch = RESULT_REWARD_ZONE
+    cv2.rectangle(annotated, (cx, cy), (cx + cw, cy + ch), (255, 255, 0), 2)
+
+    if card_rec is None:
+        card_rec = CardRecognizer(TEMPLATE_DIR)
+
+    cards_summary = []
+    if matched_state == "HOLD_CARDS":
+        recognized, rects = card_rec.recognize(screen_bgr)
+        for card, (bx, by, bw, bh) in zip(recognized, rects):
+            cv2.rectangle(annotated, (bx, by), (bx + bw, by + bh), (0, 255, 128), 3)
+            label = "JOKER" if card.card_id == JOKER_ID else f"{card.rank}{card.suit}"
+            cards_summary.append(label)
+            cv2.putText(annotated, label, (bx + 8, max(35, by - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 128), 2)
+    elif matched_state == "HIGH_LOW":
+        rects = sorted(find_all_card_rects(screen_bgr, HIGH_LOW_SEARCH_ZONE), key=lambda r: r[0])
+        for idx, (bx, by, bw, bh) in enumerate(rects):
+            color = (0, 255, 0) if idx == len(rects) - 1 else (180, 180, 180)
+            cv2.rectangle(annotated, (bx, by), (bx + bw, by + bh), color, 3)
+        if rects:
+            bx, by, bw, bh = rects[-1]
+            card = card_rec.recognize_card(screen_bgr, rects[-1])
+            label = "JOKER" if card.card_id == JOKER_ID else f"{card.rank}{card.suit}"
+            cards_summary.append(label)
+            cv2.putText(annotated, label, (bx + 8, max(35, by - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+    challenge_ocr = read_screen_number(screen_bgr, REWARD_ZONE)
+    result_ocr = read_result_number(screen_bgr, RESULT_REWARD_ZONE)
+
+    report = {
+        "state": matched_state,
+        "best_state": best_state,
+        "best_template": best_tpl,
+        "best_score": best_score,
+        "cards": cards_summary,
+        "challenge_ocr": challenge_ocr,
+        "result_ocr": result_ocr,
+    }
+    return annotated, report
 
 
 def find_all_card_rects(img, search_zone):
@@ -464,11 +598,12 @@ def read_result_number(img, search_zone):
 
 # ================= 3. 数据与主循环 =================
 def load_daily_data():
+    today = get_game_date_str()
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if data.get("date") == time.strftime("%Y-%m-%d"):
+                if data.get("date") == today:
                     return data.get("coins", 0), data.get("fails", 0)
         except Exception:
             pass
@@ -480,7 +615,7 @@ def load_daily_stage():
         return 0
     with open(DATA_FILE, encoding='utf-8') as f:
         data = json.load(f)
-    stage = data.get('phased_stage', 0) if data.get('date') == time.strftime('%Y-%m-%d') else 0
+    stage = data.get('phased_stage', 0) if data.get('date') == get_game_date_str() else 0
     if type(stage) is not int or not 0 <= stage <= 3:
         raise ValueError('保存的策略阶段无效，请检查 daily_coins.json')
     return stage
@@ -492,24 +627,34 @@ def save_daily_data(coins, fails, stage=None):
         stage = load_daily_stage()
     temporary = Path(DATA_FILE).with_suffix('.tmp')
     with temporary.open('w', encoding='utf-8') as f:
-        json.dump({"coins": coins, "fails": fails, "date": time.strftime("%Y-%m-%d"),
+        json.dump({"coins": coins, "fails": fails, "date": get_game_date_str(),
                    "phased_stage": stage}, f)
     os.replace(temporary, DATA_FILE)
 
 
-def auto_play_loop(mode='legacy'):
-    global upcoming_card_val
+def auto_play_loop(mode='legacy', target_hwnd=None, target_title=None, crop_rect=None, auto_detect_child=None):
+    global upcoming_card_val, _last_logged_target
     if mode not in ('legacy', 'phased'):
         raise ValueError('Unknown strategy mode')
+    if target_hwnd is not None or target_title is not None or crop_rect is not None or auto_detect_child is not None:
+        set_target_window(
+            hwnd=target_hwnd,
+            title=target_title,
+            crop_rect=crop_rect,
+            auto_detect_child=True if auto_detect_child is None else auto_detect_child,
+        )
+    else:
+        _last_logged_target = None
     phased = PhasedStrategy(load_daily_stage()) if mode == 'phased' else None
     if phased is not None and phased.complete:
         print('[三阶段] 今日三个目标均已完成，停止挂机。')
         return
     counter = HighLowCounter()
     card_rec = CardRecognizer(TEMPLATE_DIR)
+    active_game_date = get_game_date_str()
     daily_coins, daily_fails = load_daily_data()
     net_profit = daily_coins - (daily_fails * 50)
-    print(f"开始自动挂机... 当日累计代币: {daily_coins} | 累计失败: {daily_fails} 次 | 今日净利润: {net_profit}")
+    print(f"开始自动挂机 (账本日期: {active_game_date})... 当日累计代币: {daily_coins} | 累计失败: {daily_fails} 次 | 今日净利润: {net_profit}")
 
     has_tallied = False
     settlement_reader = SettlementReader()
@@ -527,7 +672,7 @@ def auto_play_loop(mode='legacy'):
     while daily_coins < 20000 and bot_running :
         img, win_left, win_top = capture_game_window()
         if img is None:
-            print("未找到游戏窗口，请确保游戏没有被完全最小化...")
+            print("未找到目标窗口，请确认目标窗口已打开且未被完全关闭...")
             time.sleep(1)
             continue
 
@@ -565,6 +710,14 @@ def auto_play_loop(mode='legacy'):
             continue
 
         if current_state == "START_BET":
+            now_game_date = get_game_date_str()
+            if now_game_date != active_game_date:
+                active_game_date = now_game_date
+                daily_coins, daily_fails = 0, 0
+                if phased is not None:
+                    phased = PhasedStrategy(0)
+                save_daily_data(0, 0, 0 if phased is not None else None)
+                print(f"\n[系统] 已跨过凌晨 03:00 重置点，账本切换为 {active_game_date} 并清零。")
             print("\n[状态] 初始下注")
             counter.reset()
             upcoming_card_val = None
